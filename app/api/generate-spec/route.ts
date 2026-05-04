@@ -8,8 +8,6 @@ const client = new Anthropic();
 function extractJSON(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) return fenced[1].trim();
-  const raw = text.match(/\{[\s\S]*\}/);
-  if (raw) return raw[0];
   return text.trim();
 }
 
