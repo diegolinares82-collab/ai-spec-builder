@@ -6,6 +6,12 @@ import { checkRateLimit } from "@/lib/ratelimit";
 
 const client = new Anthropic();
 
+function sanitize(input: string): string {
+  return input
+    .replace(/<[^>]*>/g, "")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+}
+
 function extractJSON(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) return fenced[1].trim();
@@ -35,11 +41,27 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const description = typeof body.description === "string" ? body.description.trim() : "";
+  const raw = typeof body.description === "string" ? body.description : "";
+
+  if (raw.trim().length === 0) {
+    return Response.json(
+      { error: "La descripción no puede estar vacía." },
+      { status: 400 }
+    );
+  }
+
+  if (raw.length > 2000) {
+    return Response.json(
+      { error: `La descripción no puede superar los 2000 caracteres (recibido: ${raw.length}).` },
+      { status: 400 }
+    );
+  }
+
+  const description = sanitize(raw).trim();
 
   if (description.length < 10) {
     return Response.json(
-      { error: "Please provide a description of at least 10 characters." },
+      { error: "La descripción debe tener al menos 10 caracteres." },
       { status: 400 }
     );
   }
