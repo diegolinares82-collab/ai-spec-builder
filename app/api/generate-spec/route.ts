@@ -12,6 +12,31 @@ function sanitize(input: string): string {
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 }
 
+const REQUIRED_KEYS: Array<keyof GenerateSpecResponse> = [
+  "vision",
+  "users",
+  "features",
+  "flows",
+  "architecture",
+  "requirements",
+];
+
+function validateSpec(obj: unknown): obj is GenerateSpecResponse {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return false;
+  const o = obj as Record<string, unknown>;
+  return (
+    typeof o.vision === "string" &&
+    typeof o.users === "string" &&
+    Array.isArray(o.features) &&
+    o.features.length > 0 &&
+    Array.isArray(o.flows) &&
+    o.flows.length > 0 &&
+    typeof o.architecture === "string" &&
+    typeof o.requirements === "string" &&
+    REQUIRED_KEYS.every((k) => k in o)
+  );
+}
+
 function extractJSON(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) return fenced[1].trim();
@@ -90,17 +115,24 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "No response received from Claude." }, { status: 500 });
     }
 
-    let spec: GenerateSpecResponse;
+    let parsed: unknown;
     try {
-      spec = JSON.parse(extractJSON(textBlock.text));
+      parsed = JSON.parse(extractJSON(textBlock.text));
     } catch {
       return Response.json(
-        { error: "Failed to parse the generated spec. Please try again." },
+        { error: "No se pudo generar la especificación. Intenta de nuevo." },
         { status: 500 }
       );
     }
 
-    return Response.json(spec);
+    if (!validateSpec(parsed)) {
+      return Response.json(
+        { error: "La respuesta no tiene la estructura esperada. Intenta de nuevo." },
+        { status: 500 }
+      );
+    }
+
+    return Response.json(parsed);
   } catch (error) {
     if (error instanceof Anthropic.APIError) {
       return Response.json(
