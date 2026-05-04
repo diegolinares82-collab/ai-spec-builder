@@ -26,7 +26,7 @@ while IFS= read -r FILE; do
   CONTENT=$(git show ":$FILE" 2>/dev/null) || continue
 
   for PATTERN in "${PATTERNS[@]}"; do
-    MATCHES=$(echo "$CONTENT" | grep -nE "$PATTERN")
+    MATCHES=$(echo "$CONTENT" | grep -nE -- "$PATTERN")
     if [ -n "$MATCHES" ]; then
       if [ "$FOUND" -eq 0 ]; then
         echo ""
