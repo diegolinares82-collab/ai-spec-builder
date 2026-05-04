@@ -53,6 +53,12 @@ export default function SpecForm({ onResult }: SpecFormProps) {
 
       const data = await res.json();
 
+      if (res.status === 429) {
+        const retryAfter = res.headers.get("Retry-After");
+        const seconds = retryAfter ? parseInt(retryAfter, 10) : 60;
+        throw new Error(`${data.error} (podés reintentar en ${seconds}s)`);
+      }
+
       if (!res.ok) {
         throw new Error(data.error || "Error al generar la especificación.");
       }

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
 import { GENERATE_SPEC_SYSTEM_PROMPT, buildGenerateSpecPrompt } from "@/lib/prompts";
 import { GenerateSpecResponse } from "@/lib/types";
+import { checkRateLimit } from "@/lib/ratelimit";
 
 const client = new Anthropic();
 
@@ -12,6 +13,20 @@ function extractJSON(text: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    req.headers.get("x-real-ip") ??
+    "unknown";
+
+  const { allowed, retryAfter } = checkRateLimit(ip);
+
+  if (!allowed) {
+    return Response.json(
+      { error: "Has generado demasiadas especificaciones. Espera un momento e inténtalo de nuevo." },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } }
+    );
+  }
+
   let body: { description?: unknown };
 
   try {
