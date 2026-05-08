@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { GenerateSpecResponse } from "@/lib/types";
 
 interface SpecFormProps {
-  onResult: (spec: GenerateSpecResponse) => void;
+  onResult: (spec: GenerateSpecResponse, idea: string) => void;
 }
 
 const LOADING_MESSAGES = [
@@ -63,7 +63,7 @@ export default function SpecForm({ onResult }: SpecFormProps) {
         throw new Error(data.error || "Error al generar la especificación.");
       }
 
-      onResult(data as GenerateSpecResponse);
+      onResult(data as GenerateSpecResponse, description);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error inesperado. Intenta de nuevo.");
     } finally {
