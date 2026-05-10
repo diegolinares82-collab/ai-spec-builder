@@ -5,6 +5,9 @@ import { GenerateSpecResponse } from "@/lib/types";
 
 interface SpecFormProps {
   onResult: (spec: GenerateSpecResponse, idea: string) => void;
+  onStreamChunk: (accumulated: string) => void;
+  onStreamStart: () => void;
+  onStreamError: () => void;
 }
 
 const LOADING_MESSAGES = [
@@ -24,7 +27,13 @@ function getQuality(length: number): { label: string; color: string } | null {
   return { label: "Lista para generar ✓", color: "text-indigo-600" };
 }
 
-export default function SpecForm({ onResult }: SpecFormProps) {
+function extractJSON(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+  return text.trim();
+}
+
+export default function SpecForm({ onResult, onStreamChunk, onStreamStart, onStreamError }: SpecFormProps) {
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -39,7 +48,7 @@ export default function SpecForm({ onResult }: SpecFormProps) {
     return () => clearInterval(id);
   }, [loading]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
@@ -51,20 +60,43 @@ export default function SpecForm({ onResult }: SpecFormProps) {
         body: JSON.stringify({ description }),
       });
 
-      const data = await res.json();
-
       if (res.status === 429) {
+        const data = await res.json();
         const retryAfter = res.headers.get("Retry-After");
         const seconds = retryAfter ? parseInt(retryAfter, 10) : 60;
         throw new Error(`${data.error} (podés reintentar en ${seconds}s)`);
       }
 
       if (!res.ok) {
+        const data = await res.json();
         throw new Error(data.error || "Error al generar la especificación.");
       }
 
-      onResult(data as GenerateSpecResponse, description);
+      if (!res.body) throw new Error("El servidor no devolvió un stream.");
+
+      onStreamStart();
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        onStreamChunk(accumulated);
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(extractJSON(accumulated));
+      } catch {
+        throw new Error("No se pudo generar la especificación. Intenta de nuevo.");
+      }
+
+      onResult(parsed as GenerateSpecResponse, description);
     } catch (err: unknown) {
+      onStreamError();
       setError(err instanceof Error ? err.message : "Error inesperado. Intenta de nuevo.");
     } finally {
       setLoading(false);

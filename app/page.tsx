@@ -3,15 +3,31 @@
 import { useState } from "react";
 import SpecForm from "@/components/SpecForm";
 import SpecOutput, { buildClipboardText } from "@/components/SpecOutput";
+import SpecSkeleton from "@/components/SpecSkeleton";
 import { GenerateSpecResponse } from "@/lib/types";
 import { buildFilename, buildMarkdown } from "@/lib/markdown";
+import { downloadPdf } from "@/lib/pdf";
 
 export default function Home() {
   const [spec, setSpec] = useState<GenerateSpecResponse | null>(null);
   const [idea, setIdea] = useState("");
   const [topCopied, setTopCopied] = useState(false);
+  const [streamingText, setStreamingText] = useState<string | null>(null);
+
+  function handleStreamStart() {
+    setStreamingText("");
+  }
+
+  function handleStreamChunk(accumulated: string) {
+    setStreamingText(accumulated);
+  }
+
+  function handleStreamError() {
+    setStreamingText(null);
+  }
 
   function handleResult(newSpec: GenerateSpecResponse, newIdea: string) {
+    setStreamingText(null);
     setSpec(newSpec);
     setIdea(newIdea);
   }
@@ -20,6 +36,7 @@ export default function Home() {
     if (window.confirm("¿Seguro que querés descartar esta especificación?")) {
       setSpec(null);
       setIdea("");
+      setStreamingText(null);
     }
   }
 
@@ -28,6 +45,11 @@ export default function Home() {
     navigator.clipboard.writeText(buildClipboardText(spec));
     setTopCopied(true);
     setTimeout(() => setTopCopied(false), 2000);
+  }
+
+  function handleDownloadPdf() {
+    if (!spec) return;
+    downloadPdf(spec, idea);
   }
 
   function handleDownload() {
@@ -63,9 +85,16 @@ export default function Home() {
           )}
         </header>
 
-        {!spec ? (
-          <SpecForm onResult={handleResult} />
-        ) : (
+        {streamingText !== null && !spec && <SpecSkeleton />}
+
+        {!spec && streamingText === null ? (
+          <SpecForm
+            onResult={handleResult}
+            onStreamChunk={handleStreamChunk}
+            onStreamStart={handleStreamStart}
+            onStreamError={handleStreamError}
+          />
+        ) : spec ? (
           <div className="space-y-4">
             {/* Actions bar */}
             <div className="flex items-center justify-between">
@@ -76,6 +105,15 @@ export default function Home() {
                 ← Nueva especificación
               </button>
               <div className="flex items-center gap-4">
+                <button
+                  onClick={handleDownloadPdf}
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                  </svg>
+                  Descargar PDF
+                </button>
                 <button
                   onClick={handleDownload}
                   className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
@@ -110,7 +148,7 @@ export default function Home() {
 
             <SpecOutput spec={spec} />
           </div>
-        )}
+        ) : null}
       </div>
     </main>
   );

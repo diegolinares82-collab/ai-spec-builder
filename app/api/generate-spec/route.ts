@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
 import { GENERATE_SPEC_SYSTEM_PROMPT, buildGenerateSpecPrompt } from "@/lib/prompts";
-import { GenerateSpecResponse } from "@/lib/types";
 import { checkRateLimit } from "@/lib/ratelimit";
 
 const client = new Anthropic();
@@ -10,37 +9,6 @@ function sanitize(input: string): string {
   return input
     .replace(/<[^>]*>/g, "")
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-}
-
-const REQUIRED_KEYS: Array<keyof GenerateSpecResponse> = [
-  "vision",
-  "users",
-  "features",
-  "flows",
-  "architecture",
-  "requirements",
-];
-
-function validateSpec(obj: unknown): obj is GenerateSpecResponse {
-  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return false;
-  const o = obj as Record<string, unknown>;
-  return (
-    typeof o.vision === "string" &&
-    typeof o.users === "string" &&
-    Array.isArray(o.features) &&
-    o.features.length > 0 &&
-    Array.isArray(o.flows) &&
-    o.flows.length > 0 &&
-    typeof o.architecture === "string" &&
-    typeof o.requirements === "string" &&
-    REQUIRED_KEYS.every((k) => k in o)
-  );
-}
-
-function extractJSON(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  return text.trim();
 }
 
 export async function POST(req: NextRequest) {
@@ -92,7 +60,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const message = await client.messages.create({
+    const stream = client.messages.stream({
       model: "claude-sonnet-4-6",
       max_tokens: 4096,
       system: [
@@ -110,29 +78,27 @@ export async function POST(req: NextRequest) {
       ],
     });
 
-    const textBlock = message.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
-      return Response.json({ error: "No response received from Claude." }, { status: 500 });
-    }
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            if (
+              chunk.type === "content_block_delta" &&
+              chunk.delta.type === "text_delta"
+            ) {
+              controller.enqueue(new TextEncoder().encode(chunk.delta.text));
+            }
+          }
+          controller.close();
+        } catch {
+          controller.error(new Error("Stream interrupted"));
+        }
+      },
+    });
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(extractJSON(textBlock.text));
-    } catch {
-      return Response.json(
-        { error: "No se pudo generar la especificación. Intenta de nuevo." },
-        { status: 500 }
-      );
-    }
-
-    if (!validateSpec(parsed)) {
-      return Response.json(
-        { error: "La respuesta no tiene la estructura esperada. Intenta de nuevo." },
-        { status: 500 }
-      );
-    }
-
-    return Response.json(parsed);
+    return new Response(readable, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   } catch (error) {
     if (error instanceof Anthropic.APIError) {
       return Response.json(
