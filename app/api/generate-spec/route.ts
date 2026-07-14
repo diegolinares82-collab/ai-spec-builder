@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { GENERATE_SPEC_SYSTEM_PROMPT, buildGenerateSpecPrompt } from "@/lib/prompts";
 import { checkRateLimit } from "@/lib/ratelimit";
 
@@ -12,6 +13,11 @@ function sanitize(input: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     req.headers.get("x-real-ip") ??

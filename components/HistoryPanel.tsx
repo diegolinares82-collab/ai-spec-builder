@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { UserButton } from "@clerk/nextjs";
 import type { SpecHistoryEntry } from "@/lib/history";
 
 interface HistoryPanelProps {
@@ -166,6 +167,13 @@ export default function HistoryPanel({
             })}
           </ul>
         )}
+      </div>
+
+      <div className="border-t border-gray-100 px-4 py-3 flex items-center gap-3">
+        <UserButton
+          appearance={{ elements: { avatarBox: "h-8 w-8" } }}
+          showName
+        />
       </div>
     </aside>
   );

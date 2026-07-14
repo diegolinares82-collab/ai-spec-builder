@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Show } from "@clerk/nextjs";
 import SpecForm from "@/components/SpecForm";
 import SpecOutput, { buildClipboardText } from "@/components/SpecOutput";
 import SpecSkeleton from "@/components/SpecSkeleton";
 import HistoryPanel from "@/components/HistoryPanel";
+import LandingScreen from "@/components/LandingScreen";
 import { GenerateSpecResponse } from "@/lib/types";
 import { buildFilename, buildMarkdown } from "@/lib/markdown";
 import { downloadPdf } from "@/lib/pdf";
@@ -115,17 +117,22 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex bg-gray-50 text-gray-900">
-      <HistoryPanel
-        entries={entries}
-        activeId={activeId}
-        onSelect={handleSelect}
-        onRename={handleRename}
-        onDelete={handleDelete}
-        onNew={handleNew}
-      />
+    <>
+      <Show when="signed-out">
+        <LandingScreen />
+      </Show>
+      <Show when="signed-in">
+        <div className="min-h-screen flex bg-gray-50 text-gray-900">
+          <HistoryPanel
+            entries={entries}
+            activeId={activeId}
+            onSelect={handleSelect}
+            onRename={handleRename}
+            onDelete={handleDelete}
+            onNew={handleNew}
+          />
 
-      <main className="flex-1 flex flex-col items-center px-4 py-16 overflow-y-auto">
+          <main className="flex-1 flex flex-col items-center px-4 py-16 overflow-y-auto">
         <div className={`w-full transition-all duration-300 ${spec ? "max-w-3xl" : "max-w-2xl"}`}>
 
           {/* Header — compacto cuando hay resultado */}
@@ -208,8 +215,10 @@ export default function Home() {
               <SpecOutput spec={spec} />
             </div>
           ) : null}
+            </div>
+          </main>
         </div>
-      </main>
-    </div>
+      </Show>
+    </>
   );
 }
